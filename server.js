@@ -1,30 +1,31 @@
-const express = require("express");
+const express = require('express');
 const app = express();
-const http = require("http").createServer(app);
-
-const io = require("socket.io")(http, {
+const server = require('http').createServer(app);
+const io = require('socket.io')(server, {
   cors: {
-    origin: "*",
+    origin: "*"
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("Server läuft!");
-});
+// NAF kompatibler Server
+io.on('connection', (socket) => {
+  console.log('User connected:', socket.id);
 
-io.on("connection", socket => {
-  console.log("User connected:", socket.id);
-
-  socket.on("joinRoom", room => {
+  socket.on('joinRoom', (room) => {
     socket.join(room);
-    socket.to(room).emit("user-connected", socket.id);
+
+    const clients = Array.from(io.sockets.adapter.rooms.get(room) || []);
+    socket.emit('connectSuccess', { joinedTime: Date.now(), clients });
+
+    socket.to(room).emit('clientConnected', { clientId: socket.id });
   });
 
-  socket.on("disconnect", () => {
-    console.log("User disconnected:", socket.id);
+  socket.on('disconnect', () => {
+    console.log('User disconnected:', socket.id);
+    socket.broadcast.emit('clientDisconnected', { clientId: socket.id });
   });
 });
 
-http.listen(process.env.PORT || 3000, () => {
-  console.log("Server läuft auf Port 3000");
+server.listen(process.env.PORT || 3000, () => {
+  console.log('Server läuft auf Port 3000');
 });

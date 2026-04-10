@@ -1,31 +1,47 @@
-const express = require('express');
+const express = require("express");
+const http = require("http");
+const socketIO = require("socket.io");
+
 const app = express();
-const server = require('http').createServer(app);
-const io = require('socket.io')(server, {
+const server = http.createServer(app);
+
+const io = new socketIO.Server(server, {
   cors: {
-    origin: "*"
+    origin: "*",
+    methods: ["GET", "POST"]
   }
 });
 
-// NAF kompatibler Server
-io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+// Health check
+app.get("/", (req, res) => {
+  res.send("NAF Server läuft 🚀");
+});
 
-  socket.on('joinRoom', (room) => {
-    socket.join(room);
+// Rooms / Signaling
+io.on("connection", (socket) => {
+  console.log("User connected:", socket.id);
 
-    const clients = Array.from(io.sockets.adapter.rooms.get(room) || []);
-    socket.emit('connectSuccess', { joinedTime: Date.now(), clients });
+  socket.on("join-room", (roomId) => {
+    socket.join(roomId);
+    console.log(`${socket.id} joined room ${roomId}`);
 
-    socket.to(room).emit('clientConnected', { clientId: socket.id });
+    socket.to(roomId).emit("connectPeer", socket.id);
   });
 
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
-    socket.broadcast.emit('clientDisconnected', { clientId: socket.id });
+  socket.on("disconnect", () => {
+    console.log("User disconnected:", socket.id);
+  });
+
+  socket.on("signal", (data) => {
+    io.to(data.to).emit("signal", {
+      from: socket.id,
+      signal: data.signal
+    });
   });
 });
 
-server.listen(process.env.PORT || 3000, () => {
-  console.log('Server läuft auf Port 3000');
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log("NAF Server läuft auf Port", PORT);
 });
